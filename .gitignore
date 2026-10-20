@@ -1,0 +1,6 @@
+.cache/
+.prolog/
+db/
+result
+result-*
+*.fasl

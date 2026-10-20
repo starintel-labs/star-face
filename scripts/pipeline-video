@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Full face pipeline over the star-face domain server:
+#   video (file or URL) -> external FR engine -> face-result messages
+#   -> face-ingest actor -> StarIntel documents in db/<dtype>/
+# Models are operator-provided and hash-pinned (same pins as face-intel CI):
+#   STAR_FACE_YUNET_MODEL / STAR_FACE_YUNET_SHA256
+#   STAR_FACE_SFACE_MODEL / STAR_FACE_SFACE_SHA256
+# Without models the pipeline runs in stub mode for wiring tests.
+set -euo pipefail
+
+REPO_ROOT="${STAR_FACE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+export STAR_FACE_ROOT="$REPO_ROOT"
+ENGINE="$REPO_ROOT/engine/face_engine.py"
+INGEST="$REPO_ROOT/scripts/ingest-face-results.lisp"
+CACHE_DIR="${STAR_FACE_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/star-face}"
+
+input=""
+stride="${STAR_FACE_FRAME_STRIDE:-30}"
+det_threshold="${STAR_FACE_DET_THRESHOLD:-0.9}"
+stub=0
+db="${STAR_FACE_DB:-$PWD/db}"
+search=0
+
+usage() {
+  echo "usage: pipeline-video [--stub] [--search] [--db DIR] VIDEO_OR_URL" >&2
+  exit 2
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --stub) stub=1; shift ;;
+    --search) search=1; shift ;;
+    --db) db="$2"; shift 2 ;;
+    --stride) stride="$2"; shift 2 ;;
+    -h|--help) usage ;;
+    *) [[ -n "$input" ]] && usage; input="$1"; shift ;;
+  esac
+done
+[[ -n "$input" ]] || usage
+
+if [[ "$input" =~ ^https?:// ]]; then
+  mkdir -p "$CACHE_DIR/videos"
+  target="$CACHE_DIR/videos/$(printf '%s' "$input" | sha256sum | cut -d' ' -f1).mp4"
+  if [[ ! -s "$target" ]]; then
+    echo "== downloading via yt-dlp: $input" >&2
+    yt-dlp --no-part -f 'mp4' -o "$target.part" "$input" >&2
+    mv "$target.part" "$target"
+  fi
+  input="$target"
+fi
+
+mkdir -p "$(dirname "$db")" "$CACHE_DIR/results" "$CACHE_DIR/specs"
+export STAR_FACE_CACHE_SPECS="$CACHE_DIR/specs"
+results="$CACHE_DIR/results/$(basename "$input")#$(date -u +%Y%m%dT%H%M%SZ).jsonl"
+
+engine_args=(python3 "$ENGINE" "$input" --frame-stride "$stride" --det-threshold "$det_threshold")
+if [[ $stub -eq 1 ]]; then
+  engine_args+=(--stub)
+else
+  : "${STAR_FACE_YUNET_MODEL:?set STAR_FACE_YUNET_MODEL or pass --stub}"
+  : "${STAR_FACE_YUNET_SHA256:?set STAR_FACE_YUNET_SHA256 or pass --stub}"
+  : "${STAR_FACE_SFACE_MODEL:?set STAR_FACE_SFACE_MODEL or pass --stub}"
+  : "${STAR_FACE_SFACE_SHA256:?set STAR_FACE_SFACE_SHA256 or pass --stub}"
+  engine_args+=(--yunet-model "$STAR_FACE_YUNET_MODEL" --yunet-sha256 "$STAR_FACE_YUNET_SHA256"
+                --sface-model "$STAR_FACE_SFACE_MODEL" --sface-sha256 "$STAR_FACE_SFACE_SHA256")
+fi
+
+echo "== engine -> $results" >&2
+"${engine_args[@]}" > "$results"
+echo "== ingest -> $db" >&2
+STAR_FACE_DB="$db" sbcl --script "$INGEST" "$results"
+
+if [[ $search -eq 1 ]]; then
+  echo "== search (first face as probe)" >&2
+  STAR_FACE_DB="$db" sbcl --script "$REPO_ROOT/scripts/search-faces.lisp" \
+    --embedding "$results"
+fi

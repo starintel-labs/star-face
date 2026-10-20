@@ -1,0 +1,13 @@
+{
+  "lockedLibrary": "org.starintel/core@1",
+  "libraryVersion": "1.0.0",
+  "digest": "sha256:3c1e7798577b50c3bda7498523134f1863697c7eb186064931285b301a9fb558",
+  "digestAlgorithm": "sha256-source-octets",
+  "provenance": {
+    "sourceRepository": "lost-rob0t/star-lang",
+    "sourceCommit": "7db89986450d4e513ff4b5c9617bf4d196b3cfb4",
+    "sourcePath": "fixtures/starintel-core.star",
+    "vendoredAs": "spec/vendor/starintel-core.star",
+    "note": "org.starintel/core@1 has no published HTTPS registry URL yet; vendored with pinned provenance until a registry release exists. Re-pin through this lock, never by editing the vendored source."
+  }
+}

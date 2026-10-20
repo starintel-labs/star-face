@@ -1,0 +1,8 @@
+(:ROOT #A((26) BASE-CHAR . "org.starintel/core@1@1.0.0") :CACHE-DIRECTORY
+ #A((13) BASE-CHAR . ".cache/specs/") :LIBRARIES
+ ((:NAME "org.starintel/core@1" :VERSION "1.0.0" :DIGEST
+   "sha256:3c1e7798577b50c3bda7498523134f1863697c7eb186064931285b301a9fb558"
+   :SOURCE
+   #A((64) BASE-CHAR
+      . "/home/unseen/starintel/star-face/spec/vendor/starintel-core.star")
+   :IMPORTS NIL)))
